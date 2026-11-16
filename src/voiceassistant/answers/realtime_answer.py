@@ -128,6 +128,7 @@ async def answer(question: str,
             await ws.close()
 
     # 1. the announcement, before any voice session is open
+    if on_phase: on_phase("search")          # the magnifier starts with the search status, not after the query step
     on_status("A pesquisar na internet…")
     await on_announce(rules["announce"])
 
@@ -147,8 +148,7 @@ async def answer(question: str,
         raise RuntimeError("model did not call web_search")
     query = json.loads(calls[0].get("arguments") or "{}").get("query", question)
 
-    if on_phase: on_phase("search")          # the octopus shows a magnifier while the web is searched
-    # 3. the search itself
+    # 3. the search itself (the magnifier is already up, from step 1)
     results = search(query, n=5)
     on_sources(results)
     on_status("A responder…")

@@ -266,6 +266,41 @@ def _mantle_folds(cx: float, cy: float) -> list[list[tuple[float, float]]]:
     ]
 
 
+def _shutter_flash(t: float) -> float:
+    """0..1 of the camera's flash: a short flash at the start of every 2.4 s cycle, like a shutter."""
+    phase = t % 2.4
+    return max(0.0, 1.0 - phase / 0.14) if phase < 0.14 else 0.0
+
+
+def _draw_camera(surf, pal: dict, cx: float, cy: float, k: float, t: float) -> None:
+    """A retro box camera held up in front of the face: viewfinder, lens, and a flash bulb that fires as it takes
+    a picture. `k` 0..1 brings it in; `cx, cy` is its centre."""
+    ek = _smoothstep(k)
+    w, h = 20.0 * ek, 13.0 * ek
+    x0, y0 = cx - w / 2, cy - h / 2
+    flash = _shutter_flash(t)
+    body = pygame.Rect(round(x0), round(y0), max(1, round(w)), max(1, round(h)))
+    pygame.draw.rect(surf, pal["outline"], body.inflate(2, 2), border_radius=2)
+    pygame.draw.rect(surf, PROP_COLORS["metal_mid"], body, border_radius=1)
+    pygame.draw.rect(surf, PROP_COLORS["metal_hi"], pygame.Rect(body.left + 1, body.top + 1, max(1, body.width - 2), 2))
+    view = pygame.Rect(round(x0 + w * 0.6), round(y0 - 3 * ek), max(1, round(5 * ek)), max(1, round(3 * ek)))
+    pygame.draw.rect(surf, pal["outline"], view.inflate(1, 1))
+    pygame.draw.rect(surf, PROP_COLORS["metal_dark"], view)
+    bulb_col = tuple(round(a + (b - a) * flash) for a, b in zip((120, 120, 140), (255, 252, 230)))
+    pygame.draw.rect(surf, pal["outline"], pygame.Rect(round(x0 + 2), round(y0 - 4 * ek), max(1, round(6 * ek)),
+                                                       max(1, round(4 * ek))).inflate(1, 1))
+    pygame.draw.rect(surf, bulb_col, pygame.Rect(round(x0 + 2), round(y0 - 4 * ek), max(1, round(6 * ek)),
+                                                 max(1, round(4 * ek))))
+    lens_x, lens_y = x0 + w * 0.38, cy + 0.5 * ek
+    lens_r = 4.4 * ek
+    _circle(surf, pal["outline"], lens_x, lens_y, lens_r + 1.2)
+    _circle(surf, PROP_COLORS["metal_dark"], lens_x, lens_y, lens_r)
+    _circle(surf, PROP_COLORS["glass_tint"], lens_x, lens_y, lens_r * 0.6)
+    _circle(surf, EYE_WHITE, lens_x - 0.8, lens_y - 0.8, max(0.6, lens_r * 0.18))
+    if flash > 0.02:
+        _circle(surf, (255, 250, 225), lens_x, lens_y, 2.5 + 6.0 * flash)
+
+
 def _draw_magnifying_glass(surf, pal: dict, lens_x: float, lens_y: float, hand_x: float, hand_y: float,
                          k: float, eye_center: tuple[float, float], pupil_offset: tuple[float, float]) -> None:
     """Draws a detailed pixel-art magnifying glass with wooden handle, metallic rim, magnified eye, and glass glint."""
@@ -394,14 +429,14 @@ def _draw_laptop(surf, pal: dict, k: float, t: float, bob_y: float) -> None:
     pygame.draw.line(surf, pal["cyan_hi"], (round(bx + 9), round(by + 20)), (round(bx + 26), round(by + 21.3)), 1)
 
 
-def _parse_poses(pose) -> tuple[float, float]:
-    """Supports both legacy `(pose_name, pk)` tuple and smooth `{'search': ks, 'write': kw}` dict."""
+def _parse_poses(pose) -> tuple[float, float, float]:
+    """(search, write, camera) weights. Accepts the dict the widget sends, or a legacy (pose_name, weight) tuple."""
     if isinstance(pose, dict):
-        return float(pose.get("search", 0.0)), float(pose.get("write", 0.0))
+        return (float(pose.get("search", 0.0)), float(pose.get("write", 0.0)), float(pose.get("camera", 0.0)))
     if isinstance(pose, (tuple, list)) and len(pose) >= 2:
         name, pk = pose[0], float(pose[1])
-        return (pk if name == "search" else 0.0), (pk if name == "write" else 0.0)
-    return 0.0, 0.0
+        return (pk if name == "search" else 0.0), (pk if name == "write" else 0.0), (pk if name == "camera" else 0.0)
+    return 0.0, 0.0, 0.0
 
 
 def _draw_scene(surf, pal: dict, mood: str, t: float, box_h: float, hearing: float = 0.0,
@@ -412,7 +447,7 @@ def _draw_scene(surf, pal: dict, mood: str, t: float, box_h: float, hearing: flo
     speaking = mood == "speak"
     thinking = mood == "think"
     idle = (mood == "idle") and (box_h < 1.0)
-    search_k, write_k = _parse_poses(pose)
+    search_k, write_k, camera_k = _parse_poses(pose)
     lk = (1.0 if listening else 0.0) if listen_k is None else max(0.0, min(1.0, float(listen_k)))
 
     head_cx = 80.0
@@ -476,6 +511,17 @@ def _draw_scene(surf, pal: dict, mood: str, t: float, box_h: float, hearing: flo
             4.0, 2.2, n=16
         )
         right_pts = _blend_pts(right_pts, search_tgt, search_k)
+
+    # Camera pose (right arm holds a retro camera up in front of the face, then snaps a picture)
+    if camera_k > 0.005:
+        cam_tgt = _cubic(
+            (head_cx + 12.0, head_cy + 14.0),
+            (head_cx + 34.0, head_cy + 6.0),
+            (head_cx + 30.0, head_cy - 12.0),
+            (head_cx + 17.0, head_cy - 8.0),
+            4.0, 2.2, n=16
+        )
+        right_pts = _blend_pts(right_pts, cam_tgt, camera_k)
 
     # Laptop typing pose (left arm reaches up-left onto the laptop keyboard)
     laptop_base_y = 38.0 + bob_y * 0.8
@@ -651,6 +697,8 @@ def _draw_scene(surf, pal: dict, mood: str, t: float, box_h: float, hearing: flo
         _draw_magnifying_glass(
             surf, pal, lens_x, lens_y, hand_x, hand_y, search_k, right_eye_pos, (pupil_dx, pupil_dy)
         )
+    if camera_k > 0.05:
+        _draw_camera(surf, pal, head_cx + 6.0, head_cy - 11.0, camera_k, t)
 
     # Pass G: Hover Play & Gear Icons
     if buttons > 0.02:
@@ -796,7 +844,7 @@ def _ease(x: float) -> float:
     return x * x * (3.0 - 2.0 * x)
 
 
-POSES = ("search", "write")
+POSES = ("search", "write", "camera")     # the moods that take the arm to a prop: magnifier, laptop, camera
 
 QUESTION_STYLE = (
     "background: #282d38; color: #f0f4f8; border: 1px solid #384152; "
@@ -827,7 +875,7 @@ class Mascot(QWidget):
         self._recording = False
 
         # Independent smooth weights for every pose & listening posture so transitions cross-fade cleanly
-        self._pose_weights: dict[str, float] = {"search": 0.0, "write": 0.0}
+        self._pose_weights: dict[str, float] = {"search": 0.0, "write": 0.0, "camera": 0.0}
         self._listen_k = 0.0
         self._pose_at = 0.0
         self._follow_until = 0.0             # the widget time until which the chat keeps the newest text in view

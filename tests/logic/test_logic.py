@@ -403,6 +403,16 @@ def test_herdr_tools():
         hp.cancel()
 
 
+def test_camera_pose():
+    """The camera is a pose of its own: it parses, it flashes at the start of each shutter cycle, and it is off between."""
+    from voiceassistant.ui import mascot as mm
+    check("camera weight is read from the pose dict",
+          mm._parse_poses({"search": 0.0, "write": 0.0, "camera": 0.7}) == (0.0, 0.0, 0.7), "")
+    check("the camera is a blended pose like search and write", "camera" in mm.POSES, str(mm.POSES))
+    check("the shutter flashes at the start of a cycle", mm._shutter_flash(0.02) > 0.5, "")
+    check("no flash between shutter clicks", mm._shutter_flash(1.0) == 0.0, "")
+
+
 FAILED: list[str] = []
 PASSED = 0
 

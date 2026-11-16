@@ -481,16 +481,26 @@ async def _answer_turn(bridge: Bridge, question: str, history: list[tuple[str, s
     bridge.answer_reset.emit()
     bridge.status.emit("A responder…")
     bridge.agent.emit("specialist" if route is not None else "assistant")
-    bridge.mood.emit("think")
+    mood = {"now": "think"}
+
+    def set_mood(m: str) -> None:
+        mood["now"] = m
+        bridge.mood.emit(m)
+
+    set_mood("think")
 
     async def speak(t: str) -> None:
         spoken["text"], spoken["active"] = t, True
-        bridge.mood.emit("speak")
+        # the announcement is spoken while the magnifier is up: the pose stays, the mouth does not move then
+        held = mood["now"] in ("search", "camera")
+        if not held:
+            set_mood("speak")
         try:
             await speech.speak(t, cancel=cancel)
         finally:
             spoken["active"] = False
-            bridge.mood.emit("think")
+            if not held:
+                set_mood("think")
 
     try:
         listener = asyncio.create_task(stop_listener(done, cancel, closing, spoken, pending))
@@ -506,12 +516,16 @@ async def _answer_turn(bridge: Bridge, question: str, history: list[tuple[str, s
             if needs_screen(q):
                 # a question about a monitor: the screenshot goes to the model with the question
                 bridge.status.emit("A ver o ecrã…")
-                out = await asyncio.to_thread(ask_screen, q)
+                set_mood("camera")               # the octopus takes a picture of the screen
+                try:
+                    out = await asyncio.to_thread(ask_screen, q)
+                finally:
+                    set_mood("think")
                 bridge.answer.emit(out)
                 return out
             if route is not None:
                 # the specialist answers; the octopus types on the laptop while it works
-                bridge.mood.emit("write")
+                set_mood("write")
                 out = await specialist_answer(q, route, bridge.status.emit, speak)
                 bridge.answer.emit(out)
                 return out
@@ -520,7 +534,7 @@ async def _answer_turn(bridge: Bridge, question: str, history: list[tuple[str, s
                                 on_status=bridge.status.emit,
                                 on_sources=bridge.sources.emit,
                                 on_announce=speak,
-                                history=history[-HISTORY_TURNS:], lang=lang, on_phase=bridge.mood.emit)
+                                history=history[-HISTORY_TURNS:], lang=lang, on_phase=set_mood)
 
         text = await produce(question)
         if text.strip() and not _answer_in_language(text):
