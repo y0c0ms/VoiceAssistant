@@ -5,7 +5,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon, QImage, QPixmap
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
-import mascot as go
+from voiceassistant.ui import mascot as go
 
 ICON_BOX = (40, 10, 120, 90)     # canvas cells (x0, y0, x1, y1): the head and the upper arms, square
 ICON_PX = 64

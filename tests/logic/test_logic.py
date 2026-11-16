@@ -6,17 +6,17 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.abspath(os.path.join(HERE, "..", "..")))
+sys.path.insert(0, os.path.abspath(os.path.join(HERE, "..", "..", "src")))
 
 import numpy as np  # noqa: E402
 
-import voice_overlay as vo  # noqa: E402
-from stop import is_stop_request  # noqa: E402
-from rich_text import plain  # noqa: E402
-from realtime_answer import _with_history, needs_search  # noqa: E402
-from screen import needs_screen, pick_side  # noqa: E402
-import web_search  # noqa: E402
-import specialist  # noqa: E402
+from voiceassistant import app as vo  # noqa: E402
+from voiceassistant.core.stop import is_stop_request  # noqa: E402
+from voiceassistant.ui.rich_text import plain  # noqa: E402
+from voiceassistant.answers.realtime_answer import _with_history, needs_search  # noqa: E402
+from voiceassistant.answers.screen import needs_screen, pick_side  # noqa: E402
+from voiceassistant.answers import web_search  # noqa: E402
+from voiceassistant.agents import specialist  # noqa: E402
 
 
 # --- Qwen specialist routing ----------------------------------------------------------------------
@@ -133,7 +133,7 @@ def test_specialist_announcement_order():
 
 def test_switch_timeline_order():
     """To the specialist: colour first, hat after. Back to the assistant: hat off first, then colour."""
-    import mascot as po2
+    from voiceassistant.ui import mascot as po2
     c, h = po2.COLOUR_S, po2.HAT_S
     st = po2.timeline(0.0, True)
     check("to specialist: colour starts at 0", st["progress"] == 0.0 and st["hat"] == 0.0, str(st))
@@ -155,7 +155,7 @@ def test_switch_timeline_order():
 def test_random_seed_point():
     import math as _m
     import random as _r
-    import mascot as po2
+    from voiceassistant.ui import mascot as po2
     seeds = [po2.random_seed_point(_r.Random(s)) for s in range(40)]
     check("seed is on the head", all((x - 80) ** 2 + (y - 40) ** 2 <= 20 ** 2 + 1e-6 for x, y in seeds), "")
     check("different rng seeds give different start points", len(set(seeds)) > 30, str(len(set(seeds))))
@@ -167,7 +167,7 @@ def test_colour_wave_covers_body():
     """The wave starts at the seed and reaches more of the octopus as progress rises, all of it at 1."""
     import random as _r
     import numpy as np
-    import mascot as po2
+    from voiceassistant.ui import mascot as po2
     seed = po2.random_seed_point(_r.Random(11))
     a_only = po2.render_frame("assistant", "assistant", 1.0, None, 0.0, "idle", 0.3, 40.0)
     b_only = po2.render_frame("specialist", "specialist", 1.0, None, 0.0, "idle", 0.3, 40.0)
@@ -183,7 +183,7 @@ def test_colour_wave_covers_body():
 
 
 def test_hat_lands_on_head():
-    import mascot as po2
+    from voiceassistant.ui import mascot as po2
     import numpy as np
     base = po2.render_frame("specialist", "specialist", 1.0, None, 0.0, "idle", 0.3, 0.0)
     half = po2.render_frame("specialist", "specialist", 1.0, None, 0.5, "idle", 0.3, 0.0)
@@ -203,8 +203,8 @@ def test_mascot_switch_and_answer():
     _os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PySide6.QtWidgets import QApplication
     app = QApplication.instance() or QApplication([])
-    import mascot as po2
-    import mascot as mm
+    from voiceassistant.ui import mascot as po2
+    from voiceassistant.ui import mascot as mm
     m = mm.Mascot(rng=_r.Random(1))
     check("mascot starts as assistant, no switch", m.agent == "assistant" and m._switch is None, "")
     m.set_agent("specialist")
@@ -250,7 +250,7 @@ def test_find_folders_and_permissions():
     approved folders (and its own) and never run a shell."""
     import json as _json
     import tempfile as _tmp
-    import specialist as sp
+    from voiceassistant.agents import specialist as sp
     root = _tmp.mkdtemp()
     os.makedirs(os.path.join(root, "projects", "example-outbox"))
     os.makedirs(os.path.join(root, ".hidden", "Outbox"))
@@ -278,7 +278,7 @@ def test_find_folders_and_permissions():
 
 def test_name_gate():
     """A turn counts only when it starts with the name; with no name set everything passes."""
-    import config as cfgm
+    from voiceassistant.core import config as cfgm
     cfg = {"assistant": {"name": "Octávio", "wake_variants": ["octavi"]}}
     check("starts with the name", cfgm.addressed_to("Octávio, que horas são?", cfg), "")
     check("name variant heard by setup", cfgm.addressed_to("Octavi, para", cfg), "")
@@ -289,7 +289,7 @@ def test_name_gate():
 
 def test_setup_name_forms():
     """Setup keeps the first word Whisper wrote for the name, and only where it is the name."""
-    import config as cfgm
+    from voiceassistant.core import config as cfgm
     takes = ["Zeta, que horas são?", "Zeta, para.", "Seta, qual é a capital?", "Carla, o que está no ecrã"]
     check("a name two takes agree on is kept", "zeta" in cfgm.name_forms_from_takes(takes),
           str(cfgm.name_forms_from_takes(takes)))
@@ -301,7 +301,7 @@ def test_setup_name_forms():
 
 def test_addressee():
     """A turn goes to the assistant (Zeta), to the specialist (Thoth), or to nobody (random speech)."""
-    import config as cfgm
+    from voiceassistant.core import config as cfgm
     cfg = {"assistant": {"name": "Zeta", "wake_variants": ["seta"]},
            "providers": {"specialist": {"name": "Thoth"}}}
     check("Zeta, ... goes to the assistant", cfgm.addressee("Zeta, que horas são?", cfg) == "assistant", "")
@@ -327,7 +327,7 @@ def test_addressee():
 
 def test_answer_language_guard():
     """An answer in French is not spoken; English and European Portuguese pass; short text is not judged."""
-    import voice_overlay as vo
+    from voiceassistant import app as vo
     french = "Bonjour, je voudrais savoir comment fonctionne le routeur de la maison aujourd hui."
     portuguese = "Olá, o router de casa está ligado à rede da sala e funciona normalmente hoje."
     english = "Hello, the router in the house is connected to the network and works normally today."
@@ -339,7 +339,7 @@ def test_answer_language_guard():
 def test_open_tool():
     """An open request names a folder; only approved folders (and the specialist's own) can be opened."""
     import tempfile as _tmp
-    import open_tool as ot
+    from voiceassistant.agents import open_tool as ot
     check("abre a pasta Outbox -> Outbox", ot.open_name("Abre a pasta Outbox.") == "Outbox", str(ot.open_name("Abre a pasta Outbox.")))
     check("open the Outbox folder -> Outbox", ot.open_name("Open the Outbox folder") == "Outbox", "")
     check("a question is not an open request", ot.open_name("Que horas são?") is None, "")
@@ -355,7 +355,7 @@ def test_open_tool():
 def test_open_apps():
     """An app is found by its desktop name; hidden entries are skipped; a near name still finds it."""
     import tempfile
-    import open_tool as ot
+    from voiceassistant.agents import open_tool as ot
     with tempfile.TemporaryDirectory() as d:
         with open(os.path.join(d, "firefox.desktop"), "w") as f:
             f.write("[Desktop Entry]\nType=Application\nName=Firefox\nExec=firefox %u\n")
@@ -370,6 +370,37 @@ def test_open_apps():
             check("app: an unknown name finds nothing", ot.find_app("Banana") is None, "")
         finally:
             ot.DESKTOP_DIRS = saved
+
+
+def test_herdr_tools():
+    """The front desk's pane tools: a question about panes offers them, listing and reading run without changes,
+    and a send is only staged (the caller reads it back and waits for the user's yes)."""
+    from voiceassistant.agents import herdr_pane as hp
+    from voiceassistant.answers import realtime_answer as ra
+    check("a question about panes offers the pane tools", ra.needs_panes("Lê o painel Zeta"), "")
+    check("a question without panes does not", not ra.needs_panes("Que horas são em Lisboa?"), "")
+    check("a send names the pane and the text", hp.parse_request("Envia ao painel vulk: corre os testes")
+          == ("send", {"pane": "vulk", "text": "corre os testes"}), str(hp.parse_request("Envia ao painel vulk: corre os testes")))
+    check("a send can say 'que' before the text", hp.parse_request("manda para o painel vulk que corre os testes")
+          == ("send", {"pane": "vulk", "text": "corre os testes"}), "")
+    check("a read names the pane", hp.parse_request("O que está no painel Zeta?") == ("read", {"pane": "Zeta"}), "")
+    check("a list asks for the open panes", hp.parse_request("Quais são os painéis abertos?") == ("list", {}), "")
+    check("a question that is not about panes parses to nothing", hp.parse_request("Que horas são em Lisboa?") is None, "")
+    saved_list, saved_read = hp.list_panes, hp.read_pane
+    hp.list_panes = lambda: [{"id": "p1", "title": "vulk", "cwd": "/work/proj", "focused": False, "agent": "idle"}]
+    hp.read_pane = lambda pid, lines=60: "linha 1\nlinha 2"
+    try:
+        check("list_panes lists title and folder", '"vulk"' in hp.run_tool("list_panes", {}), "")
+        check("read_pane reads the one matching pane", "linha 2" in hp.run_tool("read_pane", {"pane": "vulk"}), "")
+        out = hp.run_tool("send_to_pane", {"pane": "vulk", "text": "corre os testes"})
+        check("send_to_pane only stages, and says so", out.startswith("Preparado"), out)
+        check("the staged prompt waits for the user's yes", hp.pending() is not None
+              and hp.pending()["text"] == "corre os testes", str(hp.pending()))
+        hp.cancel()
+        check("no matching pane gives a plain message", "Não encontrei" in hp.run_tool("read_pane", {"pane": "nada"}), "")
+    finally:
+        hp.list_panes, hp.read_pane = saved_list, saved_read
+        hp.cancel()
 
 
 FAILED: list[str] = []

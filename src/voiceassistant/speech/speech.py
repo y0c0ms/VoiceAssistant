@@ -21,10 +21,11 @@ import urllib.request
 
 # langid is imported lazily, see _langid()
 
-import config
-from audio_devices import playback_sink
-from rich_text import plain
-from voice_chat import resolve_realtime_url
+from voiceassistant.core import config
+from voiceassistant.core.audio_devices import playback_sink
+from voiceassistant.ui.rich_text import plain
+from voiceassistant.core.voice_chat import resolve_realtime_url
+from voiceassistant.paths import PHOONNX_PYTHON, TUGAPHONE_SCRIPT
 
 _LANGID = None
 
@@ -37,10 +38,6 @@ def _langid():
         langid.set_languages(["pt", "en"])
         _LANGID = langid
     return _LANGID
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-PHOONNX_PYTHON = os.path.join(HERE, ".venv-phoonnx", "bin", "python")
-TUGAPHONE_SCRIPT = os.path.join(HERE, "tts_tugaphone.py")
 
 # LFM3 "female" median F0 is 186 Hz, dii's is 208 Hz: raise the English voice by that gap.
 EN_PITCH_RATIO = 208.0 / 186.0

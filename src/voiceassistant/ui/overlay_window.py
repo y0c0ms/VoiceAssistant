@@ -9,9 +9,9 @@ import os
 from PySide6.QtCore import QPropertyAnimation, Qt, QTimer
 from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget
 
-from mascot import Mascot
-from rich_text import render_html
-from taskbar import hide_from_taskbar
+from voiceassistant.ui.mascot import Mascot
+from voiceassistant.ui.rich_text import render_html
+from voiceassistant.ui.taskbar import hide_from_taskbar
 
 MARGIN = 24
 POS_PATH = os.path.expanduser("~/.config/voiceassistant/overlay.json")   # where the window was dragged to

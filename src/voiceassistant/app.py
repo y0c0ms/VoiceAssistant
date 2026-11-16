@@ -38,19 +38,19 @@ import websockets
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtWidgets import QApplication
 
-import config
-import speech
-from realtime_answer import answer
-from screen import ask_screen, needs_screen
-import specialist as specialist_mod
-from specialist import Session as SpecialistSession, answer as specialist_answer, decide as specialist_decide
-from stop import is_stop_request
-import audio_devices
-import herdr_pane
-import open_tool
-from overlay_window import Overlay
-from tray import make_tray
-from voice_chat import resolve_realtime_url, write_wav
+from voiceassistant.core import config
+from voiceassistant.speech import speech
+from voiceassistant.answers.realtime_answer import answer
+from voiceassistant.answers.screen import ask_screen, needs_screen
+from voiceassistant.agents import specialist as specialist_mod
+from voiceassistant.agents.specialist import Session as SpecialistSession, answer as specialist_answer, decide as specialist_decide
+from voiceassistant.core.stop import is_stop_request
+from voiceassistant.core import audio_devices
+from voiceassistant.agents import herdr_pane
+from voiceassistant.agents import open_tool
+from voiceassistant.ui.overlay_window import Overlay
+from voiceassistant.ui.tray import make_tray
+from voiceassistant.core.voice_chat import resolve_realtime_url, write_wav
 
 RATE = 16000
 FRAME_MS = 50                              # VAD frame, as in herdr-desk-deck
@@ -554,48 +554,6 @@ async def _answer_turn(bridge: Bridge, question: str, history: list[tuple[str, s
                 listener.cancel()
 
 
-HERDR_WORDS_RE = re.compile(r"\b(herdr|painel|pain[eé]is)\b", re.IGNORECASE)
-PANE_SEND_RE = re.compile(r"^(?:envia|manda|diz|escreve)\s+(?:ao|à|a|para\s+(?:o|a))\s*(?:painel\s+)?(?P<pane>.+?)\s*(?::|\bque\b)\s*(?P<text>.+)$",
-                           re.IGNORECASE)
-PANE_READ_RE = re.compile(r"\b(lê|le|mostra|resume|o que (?:está|esta))\b", re.IGNORECASE)
-
-
-async def herdr_turn(bridge: Bridge, text: str, stop: asyncio.Event) -> bool:
-    """A request about herdr panes. Reading a pane shows it on the card. A prompt for a pane is read back and sent
-    only after a spoken yes. True when the turn was about panes (and was handled here)."""
-    if not HERDR_WORDS_RE.search(text):
-        return False
-    send = PANE_SEND_RE.match(text.strip())
-    if send:
-        panes = await asyncio.to_thread(herdr_pane.find_panes, send["pane"])
-        if len(panes) != 1:
-            await _say(bridge, "Não encontrei um painel único com esse nome." if not panes
-                       else "Há mais do que um painel com esse nome; diz o nome completo.")
-            return True
-        staged = await asyncio.to_thread(herdr_pane.stage_send, panes[0]["id"], send["text"])
-        await _say(bridge, herdr_pane.readback(staged))
-        said, _, heard = await _record_and_transcribe(bridge, stop, FOLLOWUP_MS, gate=False)
-        if heard and not is_noise_transcript(said) and (config.normalize(said) in YES_WORDS
-                                                       or config.first_word(said) in YES_WORDS):
-            await asyncio.to_thread(herdr_pane.confirm)
-            await _say(bridge, f"Enviado para {staged['title']}.")
-        else:
-            herdr_pane.cancel()
-            await _say(bridge, "Não enviei.")
-        return True
-    if PANE_READ_RE.search(text):
-        panes = await asyncio.to_thread(herdr_pane.find_panes, text)
-        if len(panes) != 1:
-            await _say(bridge, "Não encontrei um painel único com esse nome.")
-            return True
-        shown = await asyncio.to_thread(herdr_pane.read_pane, panes[0]["id"])
-        bridge.answer_reset.emit()
-        bridge.answer.emit(html.escape(shown[-1500:]))
-        await speech.speak(f"Mostro o painel {panes[0]['title']} no ecrã.")
-        return True
-    return False                       # a question about herdr, not a pane request: the answer path takes it
-
-
 YES_WORDS = {"sim", "yes", "pode", "podes", "claro", "ok", "okay", "isso", "pode ser"}
 FOLDER_WORDS_RE = re.compile(r"\b(pasta|pastas|folder|folders|ficheiro|ficheiros|file|files|diret[oó]rio|directory)\b",
                               re.IGNORECASE)
@@ -617,6 +575,19 @@ async def ask_yes(bridge: Bridge, stop: asyncio.Event, prompt: str, tries: int =
             continue
         return config.normalize(said) in YES_WORDS or config.first_word(said) in YES_WORDS
     return False
+
+
+async def confirm_pane_send(bridge: Bridge, stop: asyncio.Event) -> None:
+    """A prompt the assistant staged for a herdr pane is read back, and sent only after a spoken yes."""
+    staged = herdr_pane.pending()
+    if staged is None:
+        return
+    if await ask_yes(bridge, stop, herdr_pane.readback(staged)):
+        await asyncio.to_thread(herdr_pane.confirm)
+        await _say(bridge, f"Enviado para {staged['title']}.")
+    else:
+        herdr_pane.cancel()
+        await _say(bridge, "Não enviei.")
 
 
 async def folder_gate(bridge: Bridge, question: str, stop: asyncio.Event) -> bool:
@@ -806,14 +777,12 @@ async def session_main(bridge: Bridge, stop: asyncio.Event) -> None:
                     await _say(bridge, f"Não encontrei {wanted}.")
                 bridge.status.emit("")
                 continue
-            if await herdr_turn(bridge, text, stop):
-                bridge.status.emit("")
-                continue
             if use_qwen and not await folder_gate(bridge, text, stop):
                 bridge.status.emit("")
                 continue
             answer_text, said = await _answer_turn(bridge, text, history, closing, lang,
                                                    spec if use_qwen else None, stop)
+            await confirm_pane_send(bridge, stop)
             for diagram in open_tool.diagram_files(answer_text):
                 open_tool.open_path(diagram)
             agent_qwen = use_qwen          # sticky: the next question stays with the same agent
@@ -852,7 +821,7 @@ def _spawn() -> None:
         # Wayland clients can't place their own windows; under XWayland Qt can, so the
         # card lands on the primary screen instead of wherever KWin puts it
         env = {**os.environ, "QT_QPA_PLATFORM": "xcb"}
-        subprocess.Popen([sys.executable, os.path.abspath(__file__)], start_new_session=True,
+        subprocess.Popen([sys.executable, "-m", "voiceassistant"], start_new_session=True,
                          stdin=subprocess.DEVNULL, stdout=log, stderr=log, env=env)
 
 
@@ -974,7 +943,7 @@ def run_gui(setup: bool = False, target: str = "assistant") -> None:
         worker.join(timeout=3)
     if restart["requested"]:
         # the same process id is kept, so the pid file stays valid for the new start
-        os.execv(sys.executable, [sys.executable, *sys.argv])
+        os.execv(sys.executable, [sys.executable, "-m", "voiceassistant", *sys.argv[1:]])
     try:
         os.remove(PIDFILE)
     except FileNotFoundError:

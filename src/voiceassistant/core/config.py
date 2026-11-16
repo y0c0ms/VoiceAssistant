@@ -17,10 +17,10 @@ import shutil
 import unicodedata
 
 import yaml
+from voiceassistant.paths import EXAMPLE_CONFIG
 
-HERE = os.path.dirname(os.path.abspath(__file__))
 PATH = os.path.expanduser("~/.config/voiceassistant/config.yaml")
-EXAMPLE = os.path.join(HERE, "config.example.yaml")
+EXAMPLE = EXAMPLE_CONFIG
 
 DEFAULTS = {
     "assistant": {"name": None, "wake_variants": [], "wake_level": None, "setup_done": False},

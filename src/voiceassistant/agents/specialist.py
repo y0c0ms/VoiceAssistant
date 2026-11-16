@@ -19,7 +19,7 @@ import os
 import re
 import subprocess
 import urllib.request
-import config
+from voiceassistant.core import config
 from collections.abc import Awaitable, Callable
 
 _cfg = config.load()
@@ -253,7 +253,7 @@ async def answer(question: str, session: Session, on_status: Callable[[str], Non
                  announce: Callable[[str], Awaitable[None]]) -> str:
     """Answer a question with the specialist. The local model, if used, is loaded first and the card
     says so out loud before and after; the opencode backend has nothing to load."""
-    from speech import lang_of
+    from voiceassistant.speech.speech import lang_of
     lines = LINES["pt" if lang_of(question) == "pt" else "en"]
     try:
         if BACKEND == "qwen-local" and not await asyncio.to_thread(model_loaded):

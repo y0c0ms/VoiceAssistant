@@ -9,8 +9,8 @@ import os
 import re
 import subprocess
 
-import config
-import specialist
+from voiceassistant.core import config
+from voiceassistant.agents import specialist
 
 OPEN_RE = re.compile(
     r"^\s*(?:abre|abrir|abra|open)\s+(?:(?:a|o|the)\s+)?(?:(?:pasta|folder|ficheiro|file)\s+)?(?P<name>.+?)"

@@ -12,14 +12,16 @@ answer(question, on_text, on_status, on_sources, on_announce, history=()) -> ful
 
 The caller speaks the text with its own voices. The language of the answer follows the question.
 """
+import asyncio
 import json
 import re
 from collections.abc import Awaitable, Callable, Sequence
 
 import websockets
 
-from voice_chat import resolve_realtime_url
-from web_search import TOOL_SPEC, search
+from voiceassistant.core.voice_chat import resolve_realtime_url
+from voiceassistant.agents import herdr_pane
+from voiceassistant.answers.web_search import TOOL_SPEC, search
 
 # instructions per language of the question; the answer follows the question
 RULES = {
@@ -46,6 +48,13 @@ SEARCH_HINTS = re.compile(
 
 def needs_search(question: str) -> bool:
     return bool(SEARCH_HINTS.search(question))
+
+# words that mean the question is about the herdr terminal panes: the pane tools are offered then
+PANE_HINTS = re.compile(r"\b(herdr|painel|painéis|paineis|panes?|terminal)\b", re.IGNORECASE)
+
+
+def needs_panes(question: str) -> bool:
+    return bool(PANE_HINTS.search(question))
 
 
 def _with_history(question: str, history: Sequence[tuple[str, str]]) -> str:
@@ -100,6 +109,10 @@ async def answer(question: str,
     # the language Whisper heard the question in, when it said; the question's own text otherwise
     rules = RULES.get(_rules_lang(lang) or _lang(question), RULES["pt"])
     url = url or resolve_realtime_url()
+    if needs_panes(question):
+        pane_answer = await _answer_with_panes(question, history, rules, url, on_text, on_status)
+        if pane_answer is not None:
+            return pane_answer
 
     if not needs_search(question):
         ws = await _open(url)
@@ -157,6 +170,40 @@ async def answer(question: str,
         await ws.close()
 
 
+async def _answer_with_panes(question: str, history: Sequence[tuple[str, str]], rules: dict, url: str,
+                             on_text: Callable[[str], None], on_status: Callable[[str], None]) -> str | None:
+    """A request about the herdr panes (see herdr_pane.parse_request). It runs here: a send is only staged, and the
+    caller reads it back and waits for the user's yes; a read or a list is answered by the model from the real output.
+    None when the question is not a pane request after all."""
+    req = herdr_pane.parse_request(question)
+    if req is None:
+        return None
+    action, args = req
+    if action == "send":
+        result = await asyncio.to_thread(herdr_pane.run_tool, "send_to_pane", args)
+        staged = herdr_pane.pending()
+        text = f"Vou enviar ao painel {staged['title']}: {staged['text'].rstrip('.')}." if staged else result
+        on_text(text)
+        return text
+
+    on_status("A consultar os painéis…")
+    data = await asyncio.to_thread(herdr_pane.run_tool, "read_pane" if action == "read" else "list_panes", args)
+    ws = await _open(url)
+    try:
+        await _send(ws, {"type": "session.update", "session": {
+            "type": "realtime", "output_modalities": ["text"]}})
+        await ws.recv()
+        await _user_text(ws, rules["lang"] + "Responde à pergunta com estes dados dos painéis, em duas frases, "
+                         "sem acrescentar nada que não esteja nos dados.\n\n"
+                         f"Pergunta: {question}\nDados:\n{data}")
+        await _send(ws, {"type": "response.create"})
+        text, _ = await _collect(ws, on_text)
+        return text
+    finally:
+        await ws.close()
+
+
+
 def _rules_lang(whisper_language: str | None) -> str | None:
     """Whisper's language name ('portuguese', 'english') as a rules key ('pt', 'en'), or None."""
     if not whisper_language:
@@ -170,5 +217,5 @@ def _rules_lang(whisper_language: str | None) -> str | None:
 
 
 def _lang(question: str) -> str:
-    from speech import lang_of
+    from voiceassistant.speech.speech import lang_of
     return lang_of(question)

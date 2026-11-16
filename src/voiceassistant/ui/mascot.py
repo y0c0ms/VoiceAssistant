@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-import config
+from voiceassistant.core import config
 
 # ---------------------------------------------------------------------------------------------------------------
 # Part 1: the renderer

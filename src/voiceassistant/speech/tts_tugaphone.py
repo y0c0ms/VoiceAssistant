@@ -12,7 +12,7 @@ import wave
 from phoonnx.voice import TTSVoice
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-VOICE_DIR = os.path.join(HERE, "voices", "tugaphone")
+VOICE_DIR = os.path.abspath(os.path.join(HERE, "..", "..", "..", "voices", "tugaphone"))   # repo root / voices
 # the European Portuguese voices on disk, by name (the settings pick one)
 VOICES = {
     "dii": (os.path.join(VOICE_DIR, "dii_pt-PT.onnx"), os.path.join(VOICE_DIR, "dii_pt-PT.json")),
