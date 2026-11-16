@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Local virtualenvs (see README: one for the app, one for Portuguese TTS)
+.venv*/
+
+# Local models and voices (large, not redistributable here)
+voices/
+*.onnx
+*.onnx.json
+*.gguf
+
+# Audio and recordings
+*.wav
+*.raw
+*.mp3
+
+# Runtime data that stays on the machine
+history.jsonl
+*.log

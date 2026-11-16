@@ -1,0 +1,2 @@
+# Installed in its own virtualenv at .venv-phoonnx (the app calls it for Portuguese speech).
+phoonnx==1.98.2a1

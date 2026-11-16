@@ -1,0 +1,38 @@
+# Voice assistant configuration. Copied to ~/.config/voiceassistant/config.yaml on the first run.
+# Anything left out falls back to the defaults in config.py.
+
+assistant:
+  name: null            # the name a turn must start with, e.g. "Octávio, que horas são?"
+  wake_variants: []     # how the name was heard in setup (filled in by setup)
+  wake_level: null      # mic level of the setup recordings (filled in by setup)
+  setup_done: false
+
+tts:
+  en:
+    voice: female       # LFM3-Omni voice
+    tempo: 1.0          # 1.0 = normal speed; below 1.0 is slower
+  pt:
+    voice: dii          # dii or miro (European Portuguese, voices/tugaphone)
+    tempo: 1.0
+
+providers:
+  specialist:
+    backend: opencode                                    # opencode | qwen-local
+    opencode_model: opencode/deepseek-v4.1-flash-free
+    opencode_agent: build
+    opencode_dir: ~/.local/share/voiceassistant/specialist
+    local_model: qwen3.6-35b                             # used when backend is qwen-local
+  front_desk:
+    url: http://127.0.0.1:11435
+    model: lfm3-omni
+  transcription:
+    url: http://127.0.0.1:11435/v1/audio/transcriptions
+    model: whisper-gpu
+  search:
+    url: http://127.0.0.1:30850
+
+mic:
+  source: null          # null: the echo-cancelled source when loaded, else the default
+
+access:
+  folders: []           # folders the specialist may read and write; each one is added by voice consent
