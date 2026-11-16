@@ -14,7 +14,14 @@ import tempfile
 import time
 import urllib.request
 
-LLM_CHAT_URL = os.environ.get("VA_CHAT", "http://127.0.0.1:11435/v1/chat/completions")
+
+def _chat_url() -> str:
+    """VA_CHAT (a full URL) if set, else the front desk's address from the config file."""
+    if os.environ.get("VA_CHAT"):
+        return os.environ["VA_CHAT"]
+    from voiceassistant.core import config
+    return config.service_url("front_desk") + "/v1/chat/completions"
+
 LLM_MODEL = os.environ.get("VA_MODEL", "lfm3-omni")
 MON_W, MON_H = 1920, 1080
 MONITOR_X = {"left": 0, "right": 1920}
@@ -65,7 +72,7 @@ def ask_screen(question: str, side: str | None = None) -> str:
         "max_tokens": 300,
         "temperature": 0.2,
     }).encode()
-    req = urllib.request.Request(LLM_CHAT_URL, data=body, headers={"Content-Type": "application/json"})
+    req = urllib.request.Request(_chat_url(), data=body, headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=180) as r:
         d = json.loads(r.read().decode())
     return d["choices"][0]["message"]["content"].strip()

@@ -74,7 +74,7 @@ FLOOR_MULT_OFF = 1.5                       # ... and silence is below this many 
 SILENCE_REL = 0.2                          # ... and below this share of the voice's own level
 SPEECH_MIN_RMS = 60.0                      # absolute minimums, for a near-silent room
 SILENCE_MIN_RMS = 35.0
-WHISPER_URL = os.environ.get("VA_WHISPER", "http://127.0.0.1:11435/v1/audio/transcriptions")
+# the transcription address: VA_WHISPER if set, else providers.transcription.url in the config file
 WHISPER_MODEL = "whisper-gpu"
 NO_SPEECH_PROB = 0.6                       # Whisper's own "this is not speech" estimate, per segment
 MIC_SOURCE = os.environ.get("VA_MIC") or audio_devices.mic_source()  # echo-cancelled when the pair is loaded
@@ -207,7 +207,7 @@ def _whisper_once(wav: bytes, language: str) -> tuple[str, str, bool, float]:
     for name, value in fields:
         parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode())
     parts.append(f"--{boundary}--\r\n".encode())
-    req = urllib.request.Request(WHISPER_URL, data=b"".join(parts),
+    req = urllib.request.Request(config.service_url("transcription", "VA_WHISPER"), data=b"".join(parts),
                                  headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
     with urllib.request.urlopen(req, timeout=60) as r:
         d = json.loads(r.read().decode())

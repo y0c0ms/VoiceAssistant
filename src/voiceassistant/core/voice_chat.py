@@ -30,7 +30,8 @@ import wave
 import numpy as np
 import websockets
 
-SWAP = os.environ.get("VA_SWAP", "http://127.0.0.1:11435")
+from voiceassistant.core import config
+
 MODEL_PATH_MARK = "LFM3-Omni-2B-Q8_0.gguf"
 OUT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -43,7 +44,7 @@ def resolve_realtime_url() -> str:
     if os.environ.get("VA_WS"):
         return os.environ["VA_WS"]
     req = urllib.request.Request(
-        f"{SWAP}/v1/chat/completions",
+        f"{config.service_url('front_desk', 'VA_SWAP')}/v1/chat/completions",
         data=json.dumps({"model": "lfm3-omni",
                          "messages": [{"role": "user", "content": "ok"}],
                          "max_tokens": 1}).encode(),

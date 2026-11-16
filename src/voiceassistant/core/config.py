@@ -69,6 +69,14 @@ def load(path: str = PATH) -> dict:
     return _merge(DEFAULTS, saved)
 
 
+def service_url(key: str, env: str | None = None) -> str:
+    """The address of a model service: the environment variable when it is set (env), otherwise the address in the
+    config file (providers.<key>.url). The config file is where a machine says where its model server runs."""
+    if env and os.environ.get(env):
+        return os.environ[env]
+    return load()["providers"][key]["url"]
+
+
 def save(cfg: dict, path: str = PATH) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
